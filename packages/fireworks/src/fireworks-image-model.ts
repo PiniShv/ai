@@ -9,6 +9,10 @@ import {
   FetchFunction,
   getFromApi,
   postJsonToApi,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
 } from '@ai-sdk/provider-utils';
 import {
   asyncPollResponseSchema,
@@ -91,7 +95,7 @@ function getPollUrlForModel(
 interface FireworksImageModelConfig {
   provider: string;
   baseURL: string;
-  headers: () => Record<string, string>;
+  headers?: () => Record<string, string>;
   fetch?: FetchFunction;
   /**
    * Poll interval in milliseconds between status checks for async models.
@@ -114,6 +118,20 @@ export class FireworksImageModel implements ImageModelV4 {
 
   get provider(): string {
     return this.config.provider;
+  }
+
+  static [WORKFLOW_SERIALIZE](inst: FireworksImageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: FireworksImageModelId;
+    config: FireworksImageModelConfig;
+  }) {
+    return new FireworksImageModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
   }
 
   constructor(
@@ -185,7 +203,7 @@ export class FireworksImageModel implements ImageModelV4 {
 
     const splitSize = size?.split('x');
     const currentDate = this.config._internal?.currentDate?.() ?? new Date();
-    const combinedHeaders = combineHeaders(this.config.headers(), headers);
+    const combinedHeaders = combineHeaders(this.config.headers?.(), headers);
 
     const body = {
       prompt,

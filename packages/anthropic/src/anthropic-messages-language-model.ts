@@ -31,6 +31,11 @@ import {
   postJsonToApi,
   Resolvable,
   resolve,
+  resolveProviderReference,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
 } from '@ai-sdk/provider-utils';
 import { anthropicFailedResponseHandler } from './anthropic-error';
 import { AnthropicMessageMetadata } from './anthropic-message-metadata';
@@ -119,7 +124,7 @@ function createCitationSource(
 type AnthropicMessagesConfig = {
   provider: string;
   baseURL: string;
-  headers: Resolvable<Record<string, string | undefined>>;
+  headers?: Resolvable<Record<string, string | undefined>>;
   fetch?: FetchFunction;
   buildRequestUrl?: (baseURL: string, isStreaming: boolean) => string;
   transformRequestBody?: (
@@ -148,6 +153,20 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV4 {
 
   private readonly config: AnthropicMessagesConfig;
   private readonly generateId: () => string;
+
+  static [WORKFLOW_SERIALIZE](inst: AnthropicMessagesLanguageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: AnthropicMessagesModelId;
+    config: AnthropicMessagesConfig;
+  }) {
+    return new AnthropicMessagesLanguageModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
+  }
 
   constructor(
     modelId: AnthropicMessagesModelId,
@@ -450,7 +469,13 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV4 {
                 id: anthropicOptions.container.id,
                 skills: anthropicOptions.container.skills.map(skill => ({
                   type: skill.type,
-                  skill_id: skill.skillId,
+                  skill_id:
+                    skill.type === 'custom'
+                      ? resolveProviderReference({
+                          reference: skill.providerReference,
+                          provider: 'anthropic',
+                        })
+                      : skill.skillId,
                   version: skill.version,
                 })),
               } satisfies AnthropicContainer)
@@ -704,7 +729,7 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV4 {
     headers: Record<string, string | undefined> | undefined;
   }) {
     return combineHeaders(
-      await resolve(this.config.headers),
+      this.config.headers ? await resolve(this.config.headers) : undefined,
       headers,
       betas.size > 0 ? { 'anthropic-beta': Array.from(betas).join(',') } : {},
     );
@@ -713,9 +738,11 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV4 {
   private async getBetasFromHeaders(
     requestHeaders: Record<string, string | undefined> | undefined,
   ) {
-    const configHeaders = await resolve(this.config.headers);
+    const configHeaders = this.config.headers
+      ? await resolve(this.config.headers)
+      : undefined;
 
-    const configBetaHeader = configHeaders['anthropic-beta'] ?? '';
+    const configBetaHeader = configHeaders?.['anthropic-beta'] ?? '';
     const requestBetaHeader = requestHeaders?.['anthropic-beta'] ?? '';
 
     return new Set(
@@ -1269,6 +1296,8 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV4 {
   async doStream(
     options: LanguageModelV4CallOptions,
   ): Promise<LanguageModelV4StreamResult> {
+    'use step';
+
     const {
       args: body,
       warnings,

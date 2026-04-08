@@ -4,6 +4,10 @@ import {
   createBinaryResponseHandler,
   parseProviderOptions,
   postJsonToApi,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
 } from '@ai-sdk/provider-utils';
 import { z } from 'zod/v4';
 import { ElevenLabsConfig } from './elevenlabs-config';
@@ -59,6 +63,20 @@ export class ElevenLabsSpeechModel implements SpeechModelV4 {
 
   get provider(): string {
     return this.config.provider;
+  }
+
+  static [WORKFLOW_SERIALIZE](inst: ElevenLabsSpeechModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: ElevenLabsSpeechModelId;
+    config: ElevenLabsSpeechModelConfig;
+  }) {
+    return new ElevenLabsSpeechModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
   }
 
   constructor(
@@ -233,7 +251,7 @@ export class ElevenLabsSpeechModel implements SpeechModelV4 {
         const queryString = new URLSearchParams(queryParams).toString();
         return queryString ? `${baseUrl}?${queryString}` : baseUrl;
       })(),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: combineHeaders(this.config.headers?.(), options.headers),
       body: requestBody,
       failedResponseHandler: elevenlabsFailedResponseHandler,
       successfulResponseHandler: createBinaryResponseHandler(),

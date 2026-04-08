@@ -1,6 +1,6 @@
 {
   "name": "@ai-sdk/provider-utils",
-  "version": "5.0.0-beta.9",
+  "version": "5.0.0-beta.14",
   "license": "Apache-2.0",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -46,6 +46,7 @@
   "dependencies": {
     "@ai-sdk/provider": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
+    "@workflow/serde": "4.1.0-beta.2",
     "eventsource-parser": "^3.0.6"
   },
   "devDependencies": {

@@ -19,8 +19,16 @@ import {
   ParseResult,
   postJsonToApi,
   ResponseHandler,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
 } from '@ai-sdk/provider-utils';
 import { z } from 'zod/v4';
+import {
+  toCamelCase,
+  warnIfDeprecatedProviderOptionsKey,
+} from '../utils/to-camel-case';
 import {
   defaultOpenAICompatibleErrorStructure,
   ProviderErrorStructure,
@@ -37,7 +45,7 @@ import {
 type OpenAICompatibleCompletionConfig = {
   provider: string;
   includeUsage?: boolean;
-  headers: () => Record<string, string | undefined>;
+  headers?: () => Record<string, string | undefined>;
   url: (options: { modelId: string; path: string }) => string;
   fetch?: FetchFunction;
   errorStructure?: ProviderErrorStructure<any>;
@@ -55,6 +63,20 @@ export class OpenAICompatibleCompletionLanguageModel implements LanguageModelV4 
   private readonly config: OpenAICompatibleCompletionConfig;
   private readonly failedResponseHandler: ResponseHandler<APICallError>;
   private readonly chunkSchema; // type inferred via constructor
+
+  static [WORKFLOW_SERIALIZE](inst: OpenAICompatibleCompletionLanguageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: string;
+    config: OpenAICompatibleCompletionConfig;
+  }) {
+    return new OpenAICompatibleCompletionLanguageModel(
+      options.modelId,
+      options.config,
+    );
+  }
 
   constructor(
     modelId: OpenAICompatibleCompletionModelId,
@@ -101,13 +123,26 @@ export class OpenAICompatibleCompletionLanguageModel implements LanguageModelV4 
   }: LanguageModelV4CallOptions) {
     const warnings: SharedV4Warning[] = [];
 
-    // Parse provider options
-    const completionOptions =
+    // Warn when the raw (non-camelCase) provider name is used
+    warnIfDeprecatedProviderOptionsKey({
+      rawName: this.providerOptionsName,
+      providerOptions,
+      warnings,
+    });
+
+    // Parse provider options (support both raw and camelCase keys)
+    const completionOptions = Object.assign(
       (await parseProviderOptions({
         provider: this.providerOptionsName,
         providerOptions,
         schema: openaiCompatibleLanguageModelCompletionOptions,
-      })) ?? {};
+      })) ?? {},
+      (await parseProviderOptions({
+        provider: toCamelCase(this.providerOptionsName),
+        providerOptions,
+        schema: openaiCompatibleLanguageModelCompletionOptions,
+      })) ?? {},
+    );
 
     if (topK != null) {
       warnings.push({ type: 'unsupported', feature: 'topK' });
@@ -153,6 +188,7 @@ export class OpenAICompatibleCompletionLanguageModel implements LanguageModelV4 
         presence_penalty: presencePenalty,
         seed,
         ...providerOptions?.[this.providerOptionsName],
+        ...providerOptions?.[toCamelCase(this.providerOptionsName)],
 
         // prompt:
         prompt: completionPrompt,
@@ -178,7 +214,7 @@ export class OpenAICompatibleCompletionLanguageModel implements LanguageModelV4 
         path: '/completions',
         modelId: this.modelId,
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: combineHeaders(this.config.headers?.(), options.headers),
       body: args,
       failedResponseHandler: this.failedResponseHandler,
       successfulResponseHandler: createJsonResponseHandler(
@@ -233,7 +269,7 @@ export class OpenAICompatibleCompletionLanguageModel implements LanguageModelV4 
         path: '/completions',
         modelId: this.modelId,
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: combineHeaders(this.config.headers?.(), options.headers),
       body,
       failedResponseHandler: this.failedResponseHandler,
       successfulResponseHandler: createEventSourceResponseHandler(

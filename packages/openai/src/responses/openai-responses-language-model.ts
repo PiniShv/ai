@@ -25,6 +25,10 @@ import {
   parseProviderOptions,
   ParseResult,
   postJsonToApi,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_DESERIALIZE,
+  WORKFLOW_SERIALIZE,
 } from '@ai-sdk/provider-utils';
 import { OpenAIConfig } from '../openai-config';
 import { openaiFailedResponseHandler } from '../openai-error';
@@ -106,6 +110,20 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV4 {
   readonly modelId: OpenAIResponsesModelId;
 
   private readonly config: OpenAIConfig;
+
+  static [WORKFLOW_SERIALIZE](inst: OpenAIResponsesLanguageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: OpenAIResponsesModelId;
+    config: OpenAIConfig;
+  }) {
+    return new OpenAIResponsesLanguageModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
+  }
 
   constructor(modelId: OpenAIResponsesModelId, config: OpenAIConfig) {
     this.modelId = modelId;
@@ -494,7 +512,7 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV4 {
       rawValue: rawResponse,
     } = await postJsonToApi({
       url,
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: combineHeaders(this.config.headers?.(), options.headers),
       body,
       failedResponseHandler: openaiFailedResponseHandler,
       successfulResponseHandler: createJsonResponseHandler(
@@ -1063,7 +1081,7 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV4 {
         path: '/responses',
         modelId: this.modelId,
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: combineHeaders(this.config.headers?.(), options.headers),
       body: {
         ...body,
         stream: true,

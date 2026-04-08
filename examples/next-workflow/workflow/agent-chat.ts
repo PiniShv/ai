@@ -1,3 +1,4 @@
+import { anthropic } from '@ai-sdk/anthropic';
 import { WorkflowAgent, type ModelCallStreamPart } from '@ai-sdk/workflow';
 import {
   convertToModelMessages,
@@ -241,7 +242,7 @@ export async function chat(messages: UIMessage[]) {
   const processedMessages = await processApprovals(modelMessages);
 
   const agent = new WorkflowAgent({
-    model: 'anthropic/claude-sonnet-4-20250514',
+    model: anthropic('claude-sonnet-4-20250514'),
     instructions:
       'You are a helpful assistant with access to weather, calculator, and file deletion tools. Always use the appropriate tool when the user asks to perform an action — never just say you will do it, actually call the tool. Keep responses concise.',
     tools,

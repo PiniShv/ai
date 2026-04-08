@@ -9,6 +9,10 @@ import {
   lazySchema,
   parseProviderOptions,
   postJsonToApi,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
   zodSchema,
 } from '@ai-sdk/provider-utils';
 import { TogetherAIImageModelId } from './togetherai-image-settings';
@@ -17,7 +21,7 @@ import { z } from 'zod/v4';
 interface TogetherAIImageModelConfig {
   provider: string;
   baseURL: string;
-  headers: () => Record<string, string>;
+  headers?: () => Record<string, string>;
   fetch?: FetchFunction;
   _internal?: {
     currentDate?: () => Date;
@@ -30,6 +34,20 @@ export class TogetherAIImageModel implements ImageModelV4 {
 
   get provider(): string {
     return this.config.provider;
+  }
+
+  static [WORKFLOW_SERIALIZE](inst: TogetherAIImageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: TogetherAIImageModelId;
+    config: TogetherAIImageModelConfig;
+  }) {
+    return new TogetherAIImageModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
   }
 
   constructor(
@@ -95,7 +113,7 @@ export class TogetherAIImageModel implements ImageModelV4 {
     // https://docs.together.ai/reference/post_images-generations
     const { value: response, responseHeaders } = await postJsonToApi({
       url: `${this.config.baseURL}/images/generations`,
-      headers: combineHeaders(this.config.headers(), headers),
+      headers: combineHeaders(this.config.headers?.(), headers),
       body: {
         model: this.modelId,
         prompt,

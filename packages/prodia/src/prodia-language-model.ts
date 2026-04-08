@@ -1,14 +1,16 @@
-import type {
-  LanguageModelV4,
-  LanguageModelV4CallOptions,
-  LanguageModelV4Content,
-  LanguageModelV4StreamPart,
-  SharedV4Warning,
+import {
+  type LanguageModelV4,
+  type LanguageModelV4CallOptions,
+  type LanguageModelV4Content,
+  type LanguageModelV4StreamPart,
+  type SharedV4Warning,
+  UnsupportedFunctionalityError,
 } from '@ai-sdk/provider';
 import type { InferSchema } from '@ai-sdk/provider-utils';
 import {
   combineHeaders,
   isCustomReasoning,
+  isProviderReference,
   convertBase64ToUint8Array,
   generateId,
   lazySchema,
@@ -16,6 +18,10 @@ import {
   parseProviderOptions,
   postFormDataToApi,
   resolve,
+  deserializeModelConfig,
+  serializeModel,
+  WORKFLOW_SERIALIZE,
+  WORKFLOW_DESERIALIZE,
   zodSchema,
 } from '@ai-sdk/provider-utils';
 import { z } from 'zod/v4';
@@ -35,6 +41,20 @@ export class ProdiaLanguageModel implements LanguageModelV4 {
 
   get provider(): string {
     return this.config.provider;
+  }
+
+  static [WORKFLOW_SERIALIZE](inst: ProdiaLanguageModel) {
+    return serializeModel(inst);
+  }
+
+  static [WORKFLOW_DESERIALIZE](options: {
+    modelId: ProdiaLanguageModelId;
+    config: ProdiaModelConfig;
+  }) {
+    return new ProdiaLanguageModel(
+      options.modelId,
+      deserializeModelConfig(options.config),
+    );
   }
 
   constructor(
@@ -126,6 +146,12 @@ export class ProdiaLanguageModel implements LanguageModelV4 {
       if (message.role === 'user') {
         for (const part of message.content) {
           if (part.type === 'file' && part.mediaType.startsWith('image/')) {
+            if (isProviderReference(part.data)) {
+              throw new UnsupportedFunctionalityError({
+                functionality: 'file parts with provider references',
+              });
+            }
+
             if (part.data instanceof Uint8Array) {
               imageBytes = part.data;
             } else if (typeof part.data === 'string') {
@@ -161,7 +187,7 @@ export class ProdiaLanguageModel implements LanguageModelV4 {
 
     const currentDate = this.config._internal?.currentDate?.() ?? new Date();
     const combinedHeaders = combineHeaders(
-      await resolve(this.config.headers),
+      this.config.headers ? await resolve(this.config.headers) : undefined,
       options.headers,
     );
 
